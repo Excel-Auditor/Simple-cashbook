@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Cashbook</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #e0e7ff;
+            --receipt: #10b981;
+            --receipt-light: #d1fae5;
+            --payment: #ef4444;
+            --payment-light: #fee2e2;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        
+        body { 
+            background-color: var(--bg); 
+            color: var(--text-main); 
+            padding-bottom: 80px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Top Header */
+        header {
+            background: var(--card); padding: 16px 20px;
+            border-bottom: 1px solid var(--border); display: flex;
+            align-items: center; position: sticky; top: 0; z-index: 50;
+        }
+        header h1 { font-size: 1.25rem; font-weight: 700; color: var(--primary); }
+
+        /* Dashboard */
+        .dashboard { padding: 16px; display: grid; gap: 12px; }
+        .card {
+            background: var(--card); border-radius: 16px; padding: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid var(--border);
+        }
+        .balance-total { background: var(--primary); color: white; border: none; }
+        .balance-label { font-size: 0.875rem; opacity: 0.9; margin-bottom: 4px; font-weight: 500;}
+        .balance-total .balance-label { color: var(--primary-light); }
+        .balance-amount { font-size: 1.75rem; font-weight: 700; }
+        
+        .sub-balances { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .balance-cash { border-top: 4px solid #f59e0b; }
+        .balance-bank { border-top: 4px solid #3b82f6; }
+        .sub-balances .balance-label { color: var(--text-muted); }
+        .sub-balances .balance-amount { font-size: 1.25rem; color: var(--text-main); }
+
+        /* Tabs Navigation */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--card); border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; padding: 12px 0; z-index: 100;
+        }
+        .nav-item {
+            background: none; border: none; color: var(--text-muted);
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: 0.2s; width: 25%;
+        }
+        .nav-item svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; }
+        .nav-item.active { color: var(--primary); }
+
+        /* Pages */
+        .page { display: none; padding: 16px; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 6px; color: var(--text-main); }
+        .form-control {
+            width: 100%; padding: 12px; border: 1px solid var(--border);
+            border-radius: 10px; font-size: 1rem; outline: none; background: #fff;
+            transition: border-color 0.2s;
+        }
+        .form-control:focus { border-color: var(--primary); }
+        
+        .btn {
+            width: 100%; padding: 14px; border-radius: 10px; border: none;
+            font-size: 1rem; font-weight: 600; cursor: pointer; transition: 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-danger { background: var(--payment-light); color: var(--payment); }
+        .btn-success { background: var(--receipt); color: white; }
+
+        /* History List */
+        .section-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 16px; color: var(--text-main); }
+        .tx-list { display: flex; flex-direction: column; gap: 12px; }
+        .tx-card {
+            background: var(--card); border-radius: 12px; padding: 16px;
+            display: flex; justify-content: space-between; align-items: center;
+            border: 1px solid var(--border);
+        }
+        .tx-details { flex: 1; }
+        .tx-desc { font-weight: 600; font-size: 1rem; margin-bottom: 4px; color: var(--text-main); }
+        .tx-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 8px; align-items: center; }
+        .tx-meta span.badge { padding: 2px 6px; border-radius: 4px; background: #f1f5f9; font-weight: 500;}
+        .tx-amount { font-weight: 700; font-size: 1.125rem; text-align: right; }
+        .tx-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-icon { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-muted); }
+        .text-green { color: var(--receipt); }
+        .text-red { color: var(--payment); }
+
+        /* Utilities */
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        hr.divider { margin: 24px 0; border: none; border-top: 1px solid var(--border); }
+        
+        /* =========================================
+           PDF Export Template (A4 Landscape Layout)
+           ========================================= */
+        #pdf-container { display: none; }
+        .pdf-wrapper { 
+            width: 1024px; /* Hard-locked width so canvas doesn't rely on screen size */
+            padding: 0; 
+            font-family: 'Helvetica', sans-serif; 
+            color: #111; 
+            background: #fff; 
+            box-sizing: border-box;
+        }
+        .pdf-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #222; padding-bottom: 10px; }
+        .pdf-header h2 { font-size: 26px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;}
+        .pdf-header p { font-size: 15px; color: #555;}
+        
+        .pdf-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+            font-size: 13px; 
+            table-layout: fixed; /* Prevents columns from expanding and shifting text */
+        }
+        .pdf-table th, .pdf-table td { 
+            border: 1px solid #cbd5e1; 
+            padding: 10px; 
+            text-align: left; 
+            word-wrap: break-word; 
+        }
+        .pdf-table th { background-color: #f1f5f9; font-weight: bold; color: #334155; }
+        .pdf-table .text-right { text-align: right; }
+        
+        .pdf-summary { margin-top: 25px; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; background: #f8fafc; font-size: 14px;}
+        .pdf-summary p { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .pdf-summary .closing { font-weight: bold; border-top: 1px solid #94a3b8; padding-top: 10px; margin-top: 10px; font-size: 16px;}
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Pro Cashbook</h1>
+    </header>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('dashboard')">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Home
+        </button>
+        <button class="nav-item" onclick="switchTab('add')">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Entry
+        </button>
+        <button class="nav-item" onclick="switchTab('reports')">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Reports
+        </button>
+        <button class="nav-item" onclick="switchTab('data')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Settings
+        </button>
+    </nav>
+
+    <main id="dashboard" class="page active">
+        <div class="dashboard">
+            <div class="card balance-total">
+                <p class="balance-label">TOTAL BALANCE</p>
+                <p class="balance-amount" id="dash-total">₹0.00</p>
+            </div>
+            <div class="sub-balances">
+                <div class="card balance-cash">
+                    <p class="balance-label">Cash</p>
+                    <p class="balance-amount" id="dash-cash">₹0.00</p>
+                </div>
+                <div class="card balance-bank">
+                    <p class="balance-label">Bank</p>
+                    <p class="balance-amount" id="dash-bank">₹0.00</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 class="section-title" style="margin-bottom:0;">Transactions</h3>
+                <span style="font-size: 0.75rem; color: var(--text-muted);" id="dashboard-date-info"></span>
+            </div>
+            <div id="recent-transactions" class="tx-list">
+                </div>
+        </div>
+    </main>
+
+    <main id="add" class="page">
+        <div class="card">
+            <h3 class="section-title" id="form-title">Add Transaction</h3>
+            <form id="tx-form">
+                <input type="hidden" id="tx-id">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="tx-date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="tx-desc" class="form-control" placeholder="e.g., Groceries, Salary..." required>
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input type="number" id="tx-amount" class="form-control" placeholder="0.00" step="0.01" min="0.01" required>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="tx-type" class="form-control">
+                            <option value="payment">Payment (Out)</option>
+                            <option value="receipt">Receipt (In)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Account</label>
+                        <select id="tx-account" class="form-control">
+                            <option value="cash">Cash</option>
+                            <option value="bank">Bank</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Transaction</button>
+                <button type="button" class="btn btn-outline" id="btn-cancel-edit" style="display: none; margin-top: 10px;" onclick="resetForm()">Cancel Edit</button>
+            </form>
+        </div>
+    </main>
+
+    <main id="reports" class="page">
+        <div class="card">
+            <h3 class="section-title">A4 Landscape Ledger</h3>
+            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 16px;">
+                Select a month to generate an A4 PDF ledger containing opening and closing balances.
+            </p>
+            
+            <div class="form-group">
+                <label>Select Month</label>
+                <input type="month" id="report-month" class="form-control" required>
+            </div>
+            
+            <button onclick="generatePDF()" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                Export PDF Ledger
+            </button>
+        </div>
+    </main>
+
+    <main id="data" class="page">
+        <div class="card" style="margin-bottom: 16px; border-left: 4px solid var(--primary);">
+            <h3 class="section-title">1. Setup Opening Balances</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">Transactions prior to this date will be ignored.</p>
+            <div class="form-group">
+                <label>Opening Date</label>
+                <input type="date" id="setup-date" class="form-control">
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Starting Cash (₹)</label>
+                    <input type="number" id="setup-cash" class="form-control" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Starting Bank (₹)</label>
+                    <input type="number" id="setup-bank" class="form-control" step="0.01" value="0">
+                </div>
+            </div>
+            <button onclick="saveInitialSettings()" class="btn btn-success">Save Openings</button>
+        </div>
+
+        <div class="card">
+            <h3 class="section-title">2. Data Management</h3>
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 0.875rem; margin-bottom: 8px;">Export Data</h4>
+                <button onclick="exportCSV()" class="btn btn-outline" style="margin-bottom: 8px;">Export All to CSV</button>
+                <button onclick="downloadFormat()" class="btn btn-outline">Download Import Format</button>
+            </div>
+            <div>
+                <h4 style="font-size: 0.875rem; margin-bottom: 8px;">Import Data</h4>
+                <input type="file" id="csv-file" accept=".csv" class="form-control" style="margin-bottom: 8px;">
+                <button onclick="importCSV()" class="btn btn-primary">Import CSV</button>
+            </div>
+            <hr class="divider">
+            <button onclick="clearAllData()" class="btn btn-danger">Delete All Data</button>
+        </div>
+    </main>
+
+    <div id="pdf-container">
+        <div class="pdf-wrapper" id="pdf-content">
+            <div class="pdf-header">
+                <h2>Ledger Report</h2>
+                <p id="pdf-month-label">Month: </p>
+            </div>
+            
+            <div class="pdf-summary" style="margin-bottom: 15px; margin-top:0;">
+                <p style="margin:0;">
+                    <span>Opening Balance (Carried forward to the 1st of this month):</span> 
+                    <span id="pdf-opening-balance">₹0.00</span>
+                </p>
+            </div>
+
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Date</th>
+                        <th style="width: 31%;">Description</th>
+                        <th style="width: 12%;">Account</th>
+                        <th style="width: 14%; text-align: right;">Receipt (In)</th>
+                        <th style="width: 14%; text-align: right;">Payment (Out)</th>
+                        <th style="width: 14%; text-align: right;">Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="pdf-table-body">
+                    </tbody>
+            </table>
+
+            <div class="pdf-summary">
+                <p><span>Total Receipts this month:</span> <span id="pdf-total-in">₹0.00</span></p>
+                <p><span>Total Payments this month:</span> <span id="pdf-total-out">₹0.00</span></p>
+                <p class="closing"><span>Closing Balance:</span> <span id="pdf-closing-balance">₹0.00</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let transactions = JSON.parse(localStorage.getItem('cashbook_tx')) || [];
+        let appSettings = JSON.parse(localStorage.getItem('cashbook_settings')) || {
+            openingDate: '2024-01-01', cash: 0, bank: 0
+        };
+
+        const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
+        const formatDate = (dateStr) => {
+            const [year, month, day] = dateStr.split('-');
+            return `${day}-${month}-${year}`;
+        };
+
+        function init() {
+            document.getElementById('tx-date').valueAsDate = new Date();
+            document.getElementById('report-month').value = new Date().toISOString().slice(0, 7);
+            
+            document.getElementById('setup-date').value = appSettings.openingDate;
+            document.getElementById('setup-cash').value = appSettings.cash;
+            document.getElementById('setup-bank').value = appSettings.bank;
+
+            updateDashboard();
+            renderHistory();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            
+            if(tabId === 'dashboard') {
+                updateDashboard();
+                renderHistory();
+            }
+        }
+
+        function saveInitialSettings() {
+            const date = document.getElementById('setup-date').value;
+            const cash = parseFloat(document.getElementById('setup-cash').value) || 0;
+            const bank = parseFloat(document.getElementById('setup-bank').value) || 0;
+            
+            if(!date) return alert("Please select an Opening Date.");
+            appSettings = { openingDate: date, cash, bank };
+            localStorage.setItem('cashbook_settings', JSON.stringify(appSettings));
+            
+            alert("Opening balances updated!");
+            updateDashboard();
+            renderHistory();
+        }
+
+        function updateDashboard() {
+            let cashIn = 0, cashOut = 0, bankIn = 0, bankOut = 0;
+
+            transactions.forEach(tx => {
+                if (tx.date >= appSettings.openingDate) {
+                    const amt = parseFloat(tx.amount);
+                    if (tx.account === 'cash') {
+                        tx.type === 'receipt' ? cashIn += amt : cashOut += amt;
+                    } else {
+                        tx.type === 'receipt' ? bankIn += amt : bankOut += amt;
+                    }
+                }
+            });
+
+            const cashBal = appSettings.cash + cashIn - cashOut;
+            const bankBal = appSettings.bank + bankIn - bankOut;
+            const totalBal = cashBal + bankBal;
+
+            document.getElementById('dash-total').textContent = formatCurrency(totalBal);
+            document.getElementById('dash-cash').textContent = formatCurrency(cashBal);
+            document.getElementById('dash-bank').textContent = formatCurrency(bankBal);
+            document.getElementById('dashboard-date-info').textContent = `Since ${formatDate(appSettings.openingDate)}`;
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('recent-transactions');
+            container.innerHTML = '';
+            const validTx = transactions.filter(tx => tx.date >= appSettings.openingDate);
+
+            if (validTx.length === 0) {
+                container.innerHTML = '<div class="empty-state">No recent transactions found.</div>';
+                return;
+            }
+
+            const sortedTx = [...validTx].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            sortedTx.forEach(tx => {
+                const isReceipt = tx.type === 'receipt';
+                const sign = isReceipt ? '+' : '-';
+                const colorClass = isReceipt ? 'text-green' : 'text-red';
+                
+                const html = `
+                    <div class="tx-card">
+                        <div class="tx-details">
+                            <div class="tx-desc">${tx.desc}</div>
+                            <div class="tx-meta">
+                                <span>${formatDate(tx.date)}</span>
+                                <span class="badge" style="text-transform: capitalize">${tx.account}</span>
+                            </div>
+                            <div class="tx-actions">
+                                <button class="btn-icon" onclick="editTx('${tx.id}')">✏️ Edit</button>
+                                <button class="btn-icon" onclick="deleteTx('${tx.id}')" style="color: var(--payment)">🗑️ Delete</button>
+                            </div>
+                        </div>
+                        <div class="tx-amount ${colorClass}">
+                            ${sign} ${formatCurrency(tx.amount)}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        document.getElementById('tx-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('tx-id').value || Date.now().toString();
+            const date = document.getElementById('tx-date').value;
+            const desc = document.getElementById('tx-desc').value;
+            const amount = parseFloat(document.getElementById('tx-amount').value);
+            const type = document.getElementById('tx-type').value;
+            const account = document.getElementById('tx-account').value;
+
+            if(date < appSettings.openingDate) {
+                if(!confirm(`Warning: This date is BEFORE your setup Opening Date. It will not be calculated. Proceed?`)) return;
+            }
+
+            const newTx = { id, date, desc, amount, type, account };
+            const existingIndex = transactions.findIndex(t => t.id === id);
+            
+            if (existingIndex > -1) {
+                transactions[existingIndex] = newTx;
+            } else {
+                transactions.push(newTx);
+            }
+
+            saveData();
+            resetForm();
+            switchTab('dashboard'); 
+            
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.querySelector('.nav-item:first-child').classList.add('active');
+        });
+
+        function editTx(id) {
+            const tx = transactions.find(t => t.id === id);
+            if (!tx) return;
+            document.getElementById('tx-id').value = tx.id;
+            document.getElementById('tx-date').value = tx.date;
+            document.getElementById('tx-desc').value = tx.desc;
+            document.getElementById('tx-amount').value = tx.amount;
+            document.getElementById('tx-type').value = tx.type;
+            document.getElementById('tx-account').value = tx.account;
+
+            document.getElementById('form-title').textContent = 'Edit Transaction';
+            document.getElementById('btn-cancel-edit').style.display = 'block';
+
+            switchTab('add');
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.querySelectorAll('.nav-item')[1].classList.add('active');
+        }
+
+        function deleteTx(id) {
+            if (confirm("Are you sure you want to delete this transaction?")) {
+                transactions = transactions.filter(t => t.id !== id);
+                saveData();
+                updateDashboard();
+                renderHistory();
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('tx-id').value = '';
+            document.getElementById('tx-form').reset();
+            document.getElementById('tx-date').valueAsDate = new Date();
+            document.getElementById('form-title').textContent = 'Add Transaction';
+            document.getElementById('btn-cancel-edit').style.display = 'none';
+        }
+
+        function saveData() { localStorage.setItem('cashbook_tx', JSON.stringify(transactions)); }
+
+        function clearAllData() {
+            if(confirm("CRITICAL WARNING: This will delete ALL transactions. Are you sure?")) {
+                transactions = [];
+                saveData(); updateDashboard(); renderHistory();
+                alert("All data cleared.");
+            }
+        }
+
+        // Generate PDF (A4 Landscape, Locked Render Width)
+        function generatePDF() {
+            const monthVal = document.getElementById('report-month').value; 
+            if(!monthVal) return alert("Please select a month.");
+
+            const [selYear, selMonth] = monthVal.split('-');
+            const reportMonthStart = `${monthVal}-01`;
+
+            if(reportMonthStart < appSettings.openingDate) {
+                return alert("The selected month is before your system's Opening Date.");
+            }
+            
+            let reportOpeningBalance = appSettings.cash + appSettings.bank;
+            const currentMonthTx = [];
+            const sortedAll = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            sortedAll.forEach(tx => {
+                if(tx.date >= appSettings.openingDate && tx.date < reportMonthStart) {
+                    tx.type === 'receipt' ? reportOpeningBalance += tx.amount : reportOpeningBalance -= tx.amount;
+                } else if (tx.date >= reportMonthStart && tx.date.startsWith(monthVal)) {
+                    currentMonthTx.push(tx);
+                }
+            });
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            document.getElementById('pdf-month-label').textContent = `${monthNames[parseInt(selMonth)-1]} ${selYear}`;
+            document.getElementById('pdf-opening-balance').textContent = formatCurrency(reportOpeningBalance);
+
+            const tbody = document.getElementById('pdf-table-body');
+            tbody.innerHTML = '';
+
+            let runningBalance = reportOpeningBalance;
+            let totalIn = 0; let totalOut = 0;
+
+            if(currentMonthTx.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">No transactions recorded.</td></tr>';
+            } else {
+                currentMonthTx.forEach(tx => {
+                    const isReceipt = tx.type === 'receipt';
+                    if(isReceipt) {
+                        runningBalance += tx.amount; totalIn += tx.amount;
+                    } else {
+                        runningBalance -= tx.amount; totalOut += tx.amount;
+                    }
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatDate(tx.date)}</td>
+                        <td>${tx.desc}</td>
+                        <td style="text-transform: capitalize">${tx.account}</td>
+                        <td class="text-right" style="color: #10b981;">${isReceipt ? formatCurrency(tx.amount) : '-'}</td>
+                        <td class="text-right" style="color: #ef4444;">${!isReceipt ? formatCurrency(tx.amount) : '-'}</td>
+                        <td class="text-right" style="font-weight: bold;">${formatCurrency(runningBalance)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('pdf-total-in').textContent = formatCurrency(totalIn);
+            document.getElementById('pdf-total-out').textContent = formatCurrency(totalOut);
+            document.getElementById('pdf-closing-balance').textContent = formatCurrency(runningBalance);
+
+            const element = document.getElementById('pdf-content');
+            
+            // Show container temporarily for capture
+            document.getElementById('pdf-container').style.display = 'block'; 
+
+            const opt = {
+                margin:       10, // 10mm uniform border
+                filename:     `Ledger_Report_${monthVal}.pdf`,
+                image:        { type: 'jpeg', quality: 1 },
+                html2canvas:  { 
+                    scale: 2, 
+                    useCORS: true, 
+                    width: 1024, // Locks rendering width to match A4
+                    windowWidth: 1024 // Prevents mobile from clipping the screen size
+                },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Hide it back
+                document.getElementById('pdf-container').style.display = 'none'; 
+            });
+        }
+
+        // CSV Logic
+        const csvHeaders = "Date(YYYY-MM-DD),Description,Amount,Type(receipt/payment),Account(cash/bank)\n";
+
+        function exportCSV() {
+            if(transactions.length === 0) return alert("No data to export.");
+            let csvContent = csvHeaders;
+            transactions.forEach(tx => {
+                csvContent += `${tx.date},"${tx.desc}",${tx.amount},${tx.type},${tx.account}\n`;
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "Cashbook_Data.csv";
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadFormat() {
+            const blob = new Blob([csvHeaders], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
+            link.download = "Cashbook_Import_Format.csv"; link.click();
+        }
+
+        function importCSV() {
+            const fileInput = document.getElementById('csv-file');
+            const file = fileInput.files[0];
+            if (!file) return alert("Please select a CSV file.");
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result; const lines = text.split('\n');
+                let importCount = 0;
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim() === '') continue;
+                    const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                    if(row && row.length >= 5) {
+                        const date = row[0].replace(/"/g, ''); const desc = row[1].replace(/"/g, '');
+                        const amount = parseFloat(row[2].replace(/"/g, ''));
+                        const type = row[3].replace(/"/g, '').toLowerCase();
+                        const account = row[4].replace(/"/g, '').toLowerCase();
+                        if(date && desc && !isNaN(amount) && ['receipt', 'payment'].includes(type) && ['cash', 'bank'].includes(account)) {
+                            transactions.push({ id: Date.now().toString() + i, date, desc, amount, type, account });
+                            importCount++;
+                        }
+                    }
+                }
+                saveData(); updateDashboard(); renderHistory();
+                fileInput.value = ""; alert(`Successfully imported ${importCount} transactions.`);
+            };
+            reader.readAsText(file);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
